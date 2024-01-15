@@ -18,20 +18,14 @@ import {
 } from "@mdxeditor/editor";
 import { Box, Card, Flex, Heading, Text, TextField } from "@radix-ui/themes";
 import { useEffect, useRef, useState } from "react";
-import { formatDistance } from "date-fns";
-import { styled } from "@stitches/react";
+import { formatDistanceToNow, intlFormat } from "date-fns";
 import { Note, storedNotes } from "@/utils/storage";
-
-const ClampedText = styled(Text, {
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-});
 
 function App() {
   const editorRef = useRef<MDXEditorMethods>(null);
   const [noteObjects, setNoteObjects] = useState<Record<number, Note>>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<number | undefined>();
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
   const currentNote =
     selectedNoteId !== undefined ? noteObjects[selectedNoteId] : undefined;
 
@@ -120,38 +114,53 @@ function App() {
       >
         <Heading>Notes</Heading>
         {Object.entries(noteObjects).map(([timeCreated, note]) => (
-          <Card asChild>
-            <button
-              onClick={() => setSelectedNoteId(Number(timeCreated))}
-              style={{ cursor: "pointer" }}
-            >
-              <Text as="div" size="2" weight="bold">
-                {note.title}
-              </Text>
-              <ClampedText as="div" color="gray" size="2">
-                {note.markdown}
-              </ClampedText>
-            </button>
-          </Card>
+          <NoteCard
+            onClick={() => setSelectedNoteId(Number(timeCreated))}
+            isSelected={Number(timeCreated) === selectedNoteId}
+            timeCreated={timeCreated}
+            note={note}
+          />
         ))}
         <Card asChild>
           <button onClick={newNote} style={{ cursor: "pointer" }}>
-            <ClampedText as="div" color="gray" size="2">
+            <Text as="div" color="gray" size="2">
               New Note
-            </ClampedText>
+            </Text>
           </button>
         </Card>
       </Flex>
-      <Flex direction="column" width="100%" p="4" gap="4">
-        <TextField.Input
-          placeholder="Untitled note"
-          size="3"
-          value={currentNote?.title}
-          onChange={(e) => handleTitleChange(e.target.value)}
-        />
-
-        <Box
-          height="100%"
+      <Flex
+        direction="column"
+        p="4"
+        gap="4"
+        style={{ width: "calc(100vw - 16.5rem)" }} // HACK
+      >
+        <Box style={{ minHeight: "1.5rem", maxHeight: "1.5rem" }}>
+          {!currentNote?.title || isEditingTitle ? (
+            <TextField.Input
+              placeholder="Untitled note"
+              size="2"
+              value={currentNote?.title}
+              onChange={(e) => handleTitleChange(e.target.value)}
+              onBlur={() => setIsEditingTitle(false)}
+              autoFocus
+            />
+          ) : (
+            <Heading
+              m="auto"
+              onClick={() => setIsEditingTitle(true)}
+              style={{
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {currentNote.title}
+            </Heading>
+          )}
+        </Box>
+        <Card
+          style={{ height: "100%", marginTop: "0.375rem" }} // HACK: aligns with top of NoteCards
           onClick={() => {
             editorRef.current?.focus();
           }}
@@ -159,6 +168,7 @@ function App() {
           <MDXEditor
             ref={editorRef}
             markdown=""
+            placeholder="Start editing using Markdown"
             onChange={handleEditorChange}
             plugins={[
               headingsPlugin(),
@@ -182,11 +192,11 @@ function App() {
               }),
             ]}
           />
-        </Box>
+        </Card>
         <Text as="div" size="2">
-          last edited{" "}
+          created {intlFormat(new Date(selectedNoteId ?? 0))}. last edited{" "}
           {currentNote &&
-            formatDistance(new Date(currentNote.timeLastModified), new Date(), {
+            formatDistanceToNow(new Date(currentNote.timeLastModified), {
               addSuffix: true,
             })}
         </Text>
@@ -196,3 +206,62 @@ function App() {
 }
 
 export default App;
+
+const NoteCard = ({
+  timeCreated,
+  note,
+  onClick,
+  isSelected,
+}: {
+  timeCreated: string;
+  note: Note;
+  onClick: React.MouseEventHandler<HTMLButtonElement>;
+  isSelected: boolean;
+}) => {
+  return (
+    <Card
+      asChild
+      {...(isSelected && {
+        style: { borderColor: "var(--blue-8)" },
+      })}
+    >
+      <button onClick={onClick} style={{ cursor: "pointer" }}>
+        <Flex direction="column" gap="2">
+          {note.title ? (
+            <Text
+              as="div"
+              size="2"
+              weight="bold"
+              style={{
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {note.title}
+            </Text>
+          ) : (
+            <Text as="div" size="2" color="gray">
+              Untitled note
+            </Text>
+          )}
+          <Text
+            as="div"
+            size="2"
+            color="gray"
+            style={{
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {note.markdown}
+          </Text>
+          <Text as="div" size="2" color="gray">
+            {intlFormat(new Date(Number(timeCreated)))}
+          </Text>
+        </Flex>
+      </button>
+    </Card>
+  );
+};
